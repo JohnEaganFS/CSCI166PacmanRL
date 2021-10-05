@@ -62,6 +62,28 @@ class ValueIterationAgent(ValueEstimationAgent):
     def runValueIteration(self):
         # Write value iteration code here
         "*** YOUR CODE HERE ***"
+        MDP = self.mdp
+        states = MDP.getStates()
+        discount = self.discount
+        for i in range(self.iterations):
+            currentValues = self.values.copy()
+            for s in states:
+                if MDP.isTerminal(s):
+                    continue
+                actions = MDP.getPossibleActions(s)
+                tempActionValues = []
+                for a in actions:
+                    T = MDP.getTransitionStatesAndProbs(s, a)
+                    # actionTransitionSum = sum([t[1] * (MDP.getReward(s, a, t[0]) + discount * currentValues[t[0]]) for t in T])
+                    actionTransitionSum = 0
+                    for t in T:
+                        nextState = t[0]
+                        probability = t[1]
+                        valueNextState = currentValues[nextState]
+                        actionTransitionSum += probability * (MDP.getReward(s, a, nextState) + discount * valueNextState)
+                    tempActionValues.append(actionTransitionSum)
+                maxActionValue = max(tempActionValues)
+                self.values[s] = maxActionValue
 
 
     def getValue(self, state):
@@ -77,6 +99,17 @@ class ValueIterationAgent(ValueEstimationAgent):
           value function stored in self.values.
         """
         "*** YOUR CODE HERE ***"
+        MDP = self.mdp
+        discount = self.discount
+        currentValues = self.values.copy()
+        T = MDP.getTransitionStatesAndProbs(state, action)
+        actionTransitionSum = 0
+        for t in T:
+            nextState = t[0]
+            probability = t[1]
+            valueNextState = currentValues[nextState]
+            actionTransitionSum += probability * (MDP.getReward(state, action, nextState) + discount * valueNextState)
+        return actionTransitionSum
         util.raiseNotDefined()
 
     def computeActionFromValues(self, state):
@@ -89,6 +122,22 @@ class ValueIterationAgent(ValueEstimationAgent):
           terminal state, you should return None.
         """
         "*** YOUR CODE HERE ***"
+        MDP = self.mdp
+        discount = self.discount
+        currentValues = self.values.copy()
+        if MDP.isTerminal(state): return None
+        actions = MDP.getPossibleActions(state)
+        actionCounter = util.Counter()
+        for a in actions:
+            T = MDP.getTransitionStatesAndProbs(state, a)
+            actionTransitionSum = 0
+            for t in T:
+                nextState = t[0]
+                probability = t[1]
+                valueNextState = currentValues[nextState]
+                actionTransitionSum += probability * (MDP.getReward(state, a, nextState) + discount * valueNextState)
+            actionCounter[a] = actionTransitionSum
+        return actionCounter.argMax()
         util.raiseNotDefined()
 
     def getPolicy(self, state):
@@ -130,6 +179,30 @@ class AsynchronousValueIterationAgent(ValueIterationAgent):
 
     def runValueIteration(self):
         "*** YOUR CODE HERE ***"
+        MDP = self.mdp
+        states = MDP.getStates()
+        discount = self.discount
+        numStates = len(MDP.getStates())
+        for i in range(self.iterations):
+            s = states[i % numStates]
+            if MDP.isTerminal(s):
+                continue
+            actions = MDP.getPossibleActions(s)
+            tempActionValues = []
+            for a in actions:
+                T = MDP.getTransitionStatesAndProbs(s, a)
+                # actionTransitionSum = sum([t[1] * (MDP.getReward(s, a, t[0]) + discount * currentValues[t[0]]) for t in T])
+                actionTransitionSum = 0
+                for t in T:
+                    nextState = t[0]
+                    probability = t[1]
+                    valueNextState = self.values[nextState]
+                    actionTransitionSum += probability * (MDP.getReward(s, a, nextState) + discount * valueNextState)
+                tempActionValues.append(actionTransitionSum)
+            maxActionValue = max(tempActionValues)
+            self.values[s] = maxActionValue
+
+
 
 class PrioritizedSweepingValueIterationAgent(AsynchronousValueIterationAgent):
     """
@@ -150,4 +223,63 @@ class PrioritizedSweepingValueIterationAgent(AsynchronousValueIterationAgent):
 
     def runValueIteration(self):
         "*** YOUR CODE HERE ***"
+        MDP = self.mdp
+        states = MDP.getStates()
+        discount = self.discount
+        # Calculate predecessors of all states
+        predecessors = {}
+        for s in states:
+            predecessors[s] = set()
+        for s in states:
+            possibleNextStates = set()
+            actions = MDP.getPossibleActions(s)
+            for a in actions:
+                T = MDP.getTransitionStatesAndProbs(s, a)
+                for t in T:
+                    nextState = t[0]
+                    possibleNextStates.add(nextState)
+            for succ in possibleNextStates:
+                predecessors[succ] = predecessors[succ] | {s}
 
+        priorityQueue = util.PriorityQueue()
+        for s in states:
+            if MDP.isTerminal(s):
+                continue
+            actions = MDP.getPossibleActions(s)
+            tempActionValues = []
+            for a in actions:
+                T = MDP.getTransitionStatesAndProbs(s, a)
+                actionTransitionSum = sum([t[1] * (MDP.getReward(s, a, t[0]) + discount * self.values[t[0]]) for t in T])
+                tempActionValues.append(actionTransitionSum)
+            maxActionValue = max(tempActionValues)
+            diff = abs(self.values[s] - maxActionValue)
+            priorityQueue.push(s, -diff)
+
+        for i in range(self.iterations):
+            if priorityQueue.isEmpty():
+                break
+            s = priorityQueue.pop()
+            if MDP.isTerminal(s):
+                continue
+            actions = MDP.getPossibleActions(s)
+            tempActionValues = []
+            for a in actions:
+                T = MDP.getTransitionStatesAndProbs(s, a)
+                actionTransitionSum = sum([t[1] * (MDP.getReward(s, a, t[0]) + discount * self.values[t[0]]) for t in T])
+                tempActionValues.append(actionTransitionSum)
+            maxActionValue = max(tempActionValues)
+            self.values[s] = maxActionValue
+            preds_of_s = predecessors[s]
+            for p in preds_of_s:
+                if MDP.isTerminal(p):
+                    continue
+                actions = MDP.getPossibleActions(p)
+                tempActionValues = []
+                for a in actions:
+                    T = MDP.getTransitionStatesAndProbs(p, a)
+                    actionTransitionSum = sum([t[1] * (MDP.getReward(p, a, t[0]) + discount * self.values[t[0]]) for t in T])
+                    tempActionValues.append(actionTransitionSum)
+                maxActionValue = max(tempActionValues)
+                diff = abs(self.values[p] - maxActionValue)
+                if diff > self.theta:
+                    priorityQueue.update(p, -diff)
