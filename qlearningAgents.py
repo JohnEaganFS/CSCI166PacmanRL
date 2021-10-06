@@ -52,6 +52,7 @@ class QLearningAgent(ReinforcementAgent):
           or the Q node value otherwise
         """
         "*** YOUR CODE HERE ***"
+        # Returning the current value of a (state, action) pair
         return self.values[(state, action)]
         util.raiseNotDefined()
 
@@ -65,8 +66,9 @@ class QLearningAgent(ReinforcementAgent):
         """
         "*** YOUR CODE HERE ***"
         actions = self.getLegalActions(state)
-        if not actions:
-            return 0.0
+        if not actions: # empty lists act as 0 for conditions so this is equivalent to checking if there are no actions
+            return 0.0 # If no legal actions, meaning a terminal state, return 0.0
+        # Otherwise, return the max Q value for that state based on all the legal actions.
         return max([self.getQValue(state,a) for a in actions])
         util.raiseNotDefined()
 
@@ -78,12 +80,12 @@ class QLearningAgent(ReinforcementAgent):
         """
         "*** YOUR CODE HERE ***"
         actions = self.getLegalActions(state)
-        if not actions:
+        if not actions: # If terminal state, no actions possible so None
             return None
-        actionValues = util.Counter()
-        for a in actions:
-            actionValues[a] = self.getQValue(state, a)
-        return actionValues.argMax()
+        actionValues = util.Counter() # Using Counter again to use argmax
+        for a in actions: # For each action
+            actionValues[a] = self.getQValue(state, a) # Value of that action set to Q value of that (state, action)
+        return actionValues.argMax() # Return the argmax (max action)
         util.raiseNotDefined()
 
     def getAction(self, state):
@@ -101,11 +103,12 @@ class QLearningAgent(ReinforcementAgent):
         legalActions = self.getLegalActions(state)
         action = None
         "*** YOUR CODE HERE ***"
-        if not legalActions:
+        if not legalActions: # If terminal, return None
             return action
-        if util.flipCoin(self.epsilon):
+        # Otherwise, flip a heads weighted coin based on parameter epsilon
+        if util.flipCoin(self.epsilon): # If "heads" (1), make a random action
             return random.choice(legalActions)
-        action = self.getPolicy(state)
+        action = self.getPolicy(state) # Else, choose the most optimal action
         return action
 
     def update(self, state, action, nextState, reward):
@@ -120,8 +123,10 @@ class QLearningAgent(ReinforcementAgent):
         "*** YOUR CODE HERE ***"
         discount = self.discount
         learning_rate = self.alpha
+        # Updates the Q value for a (state, action) pair based on an observation
         sample = reward + discount * self.computeValueFromQValues(nextState)
         oldValue = self.getQValue(state, action)
+        # Q_k+1 = Q_k + alpha * (sample - Q_k)
         newValue = oldValue + learning_rate * (sample - oldValue)
         self.values[(state, action)] = newValue
         #util.raiseNotDefined()
@@ -187,11 +192,13 @@ class ApproximateQAgent(PacmanQAgent):
           where * is the dotProduct operator
         """
         "*** YOUR CODE HERE ***"
+        # Get list of features for (state, action)
         featureVector = self.featExtractor.getFeatures(state, action)
+        # Get current weights
         weights = self.getWeights()
-        value = 0
-        for f in featureVector:
-            value += weights[f] * featureVector[f]
+        value = 0 # This represents our estimated Q value for (state, action) based on features and weights
+        for f in featureVector: # For each feature
+            value += weights[f] * featureVector[f] # Value of (state, action) for feature is w_i * F_i(s,a)
         return value
         util.raiseNotDefined()
 
@@ -206,8 +213,9 @@ class ApproximateQAgent(PacmanQAgent):
         oldValue = self.getQValue(state, action)
         diff = sample - oldValue
 
+        # w_i <- w_i + learning_rate * difference between sample and old value * feature valu
         featureVector = self.featExtractor.getFeatures(state,action)
-        for f in featureVector:
+        for f in featureVector: # Update each weight (defined in Counter by feature)
             self.weights[f] += learning_rate * diff * featureVector[f]
         #util.raiseNotDefined()
 
