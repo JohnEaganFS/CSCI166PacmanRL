@@ -249,48 +249,54 @@ class PrioritizedSweepingValueIterationAgent(AsynchronousValueIterationAgent):
         # to the new value for the updated state (if their priority increases).
         # Note that the priority is defined as -diff because a min heap was used for the priority queue so updating
         # a priority actually means checking if the value has decreased (become more negative = higher priority).
+
         # Calculate predecessors of all states
         predecessors = {} # Predecessors will be a dict with key = one state, value = set of predecessors of that state
         for s in states: # Setting up the dict values for each state to empty set
             predecessors[s] = set()
         # The idea is to go through each state s, and note each state that s can lead to.
         # Once all the possible next states are known, add s to the predecessors of those next states.
-        # Instead of calculating the predecessors directly, I'm finding which states that s is a possible predecessor
-        # to and adding s to their predecessor set.
+        # Instead of calculating the predecessors directly, I'm finding the possible successors of s and adding s to each
+        # of those successor's possible predecessors.
         for s in states: # For each state
             possibleNextStates = set()
             # I'm using sets so the same state doesn't end up in the nextStates more than once
             # which may occur if two actions can lead to the same state.
             actions = MDP.getPossibleActions(s) # Get possible actions
-            for a in actions:
-                T = MDP.getTransitionStatesAndProbs(s, a)
-                for t in T:
+            for a in actions: # For each action
+                T = MDP.getTransitionStatesAndProbs(s, a) # Get transition model for that (state,action) pair
+                for t in T: # For each possible transition
                     nextState = t[0]
-                    possibleNextStates.add(nextState)
-            for succ in possibleNextStates:
-                predecessors[succ] = predecessors[succ] | {s}
+                    possibleNextStates.add(nextState) # Add the next state as possible next state from s
+            for succ in possibleNextStates: # For each possible next state (succ)
+                predecessors[succ] = predecessors[succ] | {s} # Union/add s to the possible predecessors of each successor
 
-        priorityQueue = util.PriorityQueue()
-        for s in states:
-            if MDP.isTerminal(s):
+        # Once all predecessors are calculated, the priority queue needs to be initialized
+        priorityQueue = util.PriorityQueue() # Min-heap implementation of priority queue
+        for s in states: # For each state
+            if MDP.isTerminal(s): # If terminal, doesn't need to be updated so not added to priority queue
                 continue
-            actions = MDP.getPossibleActions(s)
+            actions = MDP.getPossibleActions(s) # Get possible actions
             tempActionValues = []
-            for a in actions:
+            for a in actions: # Same as previous implementations of value iteration (using self.values because values not being updated)
                 T = MDP.getTransitionStatesAndProbs(s, a)
                 actionTransitionSum = sum([t[1] * (MDP.getReward(s, a, t[0]) + discount * self.values[t[0]]) for t in T])
                 tempActionValues.append(actionTransitionSum)
             maxActionValue = max(tempActionValues)
+            # Calculate the priority as the difference between current value of state and one-step more value
             diff = abs(self.values[s] - maxActionValue)
+            # Push state onto the priority queue with -diff (min-heap)
             priorityQueue.push(s, -diff)
 
-        for i in range(self.iterations):
-            if priorityQueue.isEmpty():
+        for i in range(self.iterations): # For self.iterations iterations
+            if priorityQueue.isEmpty(): # If the priority queue is empty, you can stop early
                 break
-            s = priorityQueue.pop()
-            if MDP.isTerminal(s):
+            s = priorityQueue.pop() # Otherwise, pop the next state off the priority queue based on -diff.
+            if MDP.isTerminal(s): # If terminal, move on
                 continue
-            actions = MDP.getPossibleActions(s)
+            # Perform one step of value iteration on the state as usual
+            # As with asynchronous value iteration, only one state value is updated per iteration so self.values can used directly
+            actions = MDP.getPossibleActions(s) 
             tempActionValues = []
             for a in actions:
                 T = MDP.getTransitionStatesAndProbs(s, a)
@@ -299,10 +305,12 @@ class PrioritizedSweepingValueIterationAgent(AsynchronousValueIterationAgent):
             maxActionValue = max(tempActionValues)
             self.values[s] = maxActionValue
 
+            # For each of the predecessors, there priority may need to be updated based on the new state value
             preds_of_s = predecessors[s]
-            for p in preds_of_s:
-                if MDP.isTerminal(p):
+            for p in preds_of_s: # For each of the predecessors
+                if MDP.isTerminal(p): # If terminal, ignore
                     continue
+                # Calculate priority like before with -diff
                 actions = MDP.getPossibleActions(p)
                 tempActionValues = []
                 for a in actions:
@@ -311,5 +319,8 @@ class PrioritizedSweepingValueIterationAgent(AsynchronousValueIterationAgent):
                     tempActionValues.append(actionTransitionSum)
                 maxActionValue = max(tempActionValues)
                 diff = abs(self.values[p] - maxActionValue)
+                # Only update the priority (or add predecessor back into priority queue if it has been popped in prevous iteration)
+                # if the diff is greater than the parameter self.theta.
+                # This sets a minimum for the difference in values to be considered worth updating
                 if diff > self.theta:
                     priorityQueue.update(p, -diff)
